@@ -1,19 +1,20 @@
 #!/usr/bin/env julia
+using DelimitedFiles
 
 const OUTPUT = haskey(ENV, "OUTPUT")
 
-immutable Node
+struct Node
     starting::Int32
     no_of_edges::Int32
 end
 
 function Usage()
     prog = basename(Base.source_path())
-    println(STDERR,"Usage: ", prog, " <input_file>")
+    println(stderr,"Usage: ", prog, " <input_file>")
     exit(1)
 end
 
-function parseline{T<:Number}(::Type{T}, f)
+function parseline(::Type{T}, f) where {T<:Number}
     while true
         line = chomp(readline(f))
         if length(line) > 0
@@ -27,13 +28,13 @@ function main(args)
     if length(args) != 1
         Usage()
     end
- 
-    info("Reading file")
+
+    @info "Reading file"
     f = open(args[1],"r")
 
     # Read graph data
     no_of_nodes, = parseline(Int,f)
-    h_graph_nodes = Array{Node, 1}(no_of_nodes)
+    h_graph_nodes = Array{Node, 1}(undef, no_of_nodes)
     for i in 1:no_of_nodes
         start, edgeno = parseline(Int, f)
         # add one to every node index to accomodate for 1-based arrays
@@ -60,13 +61,12 @@ function main(args)
     h_graph_edges = [h_graph_edges_with_cost[row,1]+1 for row in 1:size(h_graph_edges_with_cost,1)]
 
     close(f)
- 
+
     h_cost = fill(Int32(-1),no_of_nodes)
     h_cost[source] = 0
 
-    info("Start traversing the tree")
+    @info "Start traversing the tree"
 
-    tic()
     again = true
     while again
         # if no one changes this value then the loop stops
@@ -94,7 +94,6 @@ function main(args)
             end
         end
     end
-    toc()
 
 
     if OUTPUT
@@ -103,7 +102,7 @@ function main(args)
             println(f,i-1,") cost:",h_cost[i])
         end
         close(f)
-        info("Result stored in output.txt")
+        @info "Result stored in output.txt"
     end
 end
 
