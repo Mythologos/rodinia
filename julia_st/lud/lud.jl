@@ -1,6 +1,9 @@
-include("common.jl")
+import Pkg
+Pkg.activate(".")
 
-using ArgParse
+using ArgParse, Printf
+
+include("common.jl")
 
 function lud_omp(a,size)
     for i = 1:size
@@ -23,7 +26,7 @@ end
 
 function main(args)
     s = ArgParseSettings()
-    @add_arg_table s begin
+    @add_arg_table! s begin
         "-i", "--input"
         "-s", "--size"
             arg_type = Int
@@ -54,9 +57,9 @@ function main(args)
         matrix_copy = copy(matrix)
     end
 
-    tic()
+    #tic()
     lud_omp(matrix, matrix_dim)
-    println("Time consumed(ms): ", toq() * 1000)
+    #println("Time consumed(ms): ", toq() * 1000)
 
     if verify
         println("After LUD")

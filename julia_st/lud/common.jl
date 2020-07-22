@@ -1,5 +1,5 @@
 function lud_verify(m, lu, matrix_dim)
-    tmp = Array{Float32}(matrix_dim, matrix_dim)
+    tmp = Array{Float32}(undef,matrix_dim, matrix_dim)
 
     for i = 1:matrix_dim
         for j = 1:matrix_dim
@@ -34,7 +34,7 @@ end
 # Generate well-conditioned matrix internally by Ke Wang 2013/08/07 22:20:06
 function create_matrix(size)
     lamda = -0.001
-    coe = Array{Float32}(2 * size - 1)
+    coe = Array{Float32}(undef,2 * size - 1)
 
     for i = 0:size-1
         coe_i = 10 * exp(lamda * i);
@@ -42,7 +42,7 @@ function create_matrix(size)
         coe[size - i] = coe_i
     end
 
-    matrix = Array{Float32}(size, size)
+    matrix = Array{Float32}(undef,size, size)
 
     for i = 1:size
         for j = 1:size
