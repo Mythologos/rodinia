@@ -1,4 +1,6 @@
 #!/usr/bin/env julia
+using Printf
+import Random
 
 OUTPUT = false
 
@@ -37,30 +39,30 @@ function main(args)
     niter = parse(Int32,args[8])
 
     size_R = (r2 - r1 + 1) * (c2 - c1 + 1);
-    
-    iN::Array{Int32,1} = [i-1 for i in 1:rows] 
+
+    iN::Array{Int32,1} = [i-1 for i in 1:rows]
     iS::Array{Int32,1} = [i+1 for i in 1:rows]
-    jW::Array{Int32,1} = [j-1 for j in 1:cols] 
+    jW::Array{Int32,1} = [j-1 for j in 1:cols]
     jE::Array{Int32,1} = [j+1 for j in 1:cols]
     iN[1] = 1
     iS[rows] = rows
     jW[1] = 1
     jE[cols] = cols
 
-    dN = Array{Float32,2}(rows,cols)
-    dS = Array{Float32,2}(rows,cols)
-    dW = Array{Float32,2}(rows,cols)
-    dE = Array{Float32,2}(rows,cols)
+    dN = Array{Float32,2}(undef,rows,cols)
+    dS = Array{Float32,2}(undef,rows,cols)
+    dW = Array{Float32,2}(undef,rows,cols)
+    dE = Array{Float32,2}(undef,rows,cols)
 
     println("Randomizing the input matrix")
 
-    srand(7)
+    Random.seed!(7)
     I = rand(Float32,rows,cols)
     J::Array{Float32,2} = map(exp,I)
-    c = Array{Float32,2}(rows,cols)
+    c = Array{Float32,2}(undef,rows,cols)
 
     println("Start the SRAD main loop")
-  
+
     sum::Float32 = 0
     sum2::Float32 = 0
     for iter in 1:niter
@@ -133,7 +135,7 @@ function main(args)
     if OUTPUT
         for i in 1:size(J,1)
             for j in 1:size(J,2)
-               print(@sprintf("%.5f ",J[i,j])) 
+               print(@sprintf("%.5f ",J[i,j]))
             end
             println()
         end
