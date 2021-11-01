@@ -1,5 +1,3 @@
-#!/bin/bash
-
 ./hurricanegen 65536 1
 ./hurricanegen 131072 1
 ./hurricanegen 262144 1

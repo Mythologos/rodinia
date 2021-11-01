@@ -1,3 +1,5 @@
+using Printf
+
 REC_LENGTH = 49   # size of a record in db
 REC_WINDOW = 10   # number of records to read at a time
 LATITUDE_POS = 28 # location of latitude coordinates in input record
@@ -5,7 +7,7 @@ OPEN = 10000      # initial value of nearest neighbors
 
 const OUTPUT = haskey(ENV, "OUTPUT")
 
-type Neighbor
+mutable struct Neighbor
     entry::String
     dist::Float64
 end
@@ -35,7 +37,7 @@ function main(args)
     target_lat = parse(Float64, args[3])
     target_long = parse(Float64, args[4])
 
-    neighbors = Array{Neighbor}(k)
+    neighbors = Array{Neighbor}(undef, k)
     #if (neighbors == NULL) {
     #    fprintf(stderr, "no room for neighbors\n");
     #    exit(0);
@@ -60,8 +62,8 @@ function main(args)
     #}
 
     done::Bool = false
-    z = Array{Float32}(REC_WINDOW)
-    sandbox = Array{String}(REC_WINDOW)
+    z = Array{Float32}(undef, REC_WINDOW)
+    sandbox = Array{String}(undef, REC_WINDOW)
 
     while !done
         # Read in REC_WINDOW number of records
@@ -123,6 +125,13 @@ function main(args)
                 neighbors[max_idx].entry = sandbox[i]
                 neighbors[max_idx].dist = z[i];
             end
+        end
+    end
+
+    print("The ", k, " nearest neighbors are:\n");
+    for j in length(neighbors):-1:1
+        if neighbors[j].dist != OPEN
+            println(neighbors[j].entry, "; ", neighbors[j].dist)
         end
     end
 

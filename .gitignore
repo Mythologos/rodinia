@@ -4,3 +4,4 @@ profile_*.csv
 nvprof.csv.*
 Manifest.toml
 
+notes*.txt
