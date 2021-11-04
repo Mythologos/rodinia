@@ -1,4 +1,6 @@
-include("../../common/julia/wrappers.jl")
+import Random
+
+using Printf
 
 BIGRND   = 0x7fffffff
 RAND_MAX = 2147483647
@@ -6,39 +8,40 @@ RAND_MAX = 2147483647
 ETA      = 0.3 # eta value
 MOMENTUM = 0.3 # momentum value
 
-type BPNN
-    input_n  # number of input units
-    hidden_n # number of hidden units
-    output_n # number of output units
+mutable struct BPNN
+    input_n::Int  # number of input units
+    hidden_n::Int # number of hidden units
+    output_n::Int # number of output units
 
-    input_units  # the input units
-    hidden_units # the hidden units
-    output_units # the output units
+    input_units::Vector{Float32}  # the input units
+    hidden_units::Vector{Float32} # the hidden units
+    output_units::Vector{Float32} # the output units
 
-    hidden_delta # storage for hidden unit error
-    output_delta # storage for output unit error
+    hidden_delta::Vector{Float32} # storage for hidden unit error
+    output_delta::Vector{Float32} # storage for output unit error
 
-    target # storage for target vector
+    target::Vector{Float32} # storage for target vector
 
-    input_weights  # weights from input to hidden layer
-    hidden_weights # weights from hidden to output layer
+    input_weights::Matrix{Float32}  # weights from input to hidden layer
+    hidden_weights::Matrix{Float32} # weights from hidden to output layer
 
     # The next two are for momentum.
-    input_prev_weights  # previous change on input to hidden weights
-    hidden_prev_weights # previous change on hidden to output weights
+    input_prev_weights::Matrix{Float32}  # previous change on input to hidden weights
+    hidden_prev_weights::Matrix{Float32} # previous change on hidden to output weights
 
     BPNN(input_n, hidden_n, output_n) =
         new(input_n, hidden_n, output_n,
-            Array{Float32}(input_n + 1),
-            Array{Float32}(hidden_n + 1),
-            Array{Float32}(output_n + 1),
-            Array{Float32}(hidden_n + 1),
-            Array{Float32}(output_n + 1),
-            Array{Float32}(output_n + 1),
-            Array{Float32}(input_n + 1, hidden_n + 1),
-            Array{Float32}(hidden_n + 1, output_n + 1),
-            Array{Float32}(input_n + 1, hidden_n + 1),
-            Array{Float32}(hidden_n + 1, output_n + 1))
+            Array{Float32}(undef, input_n + 1),
+            Array{Float32}(undef, hidden_n + 1),
+            Array{Float32}(undef, output_n + 1),
+            Array{Float32}(undef, hidden_n + 1),
+            Array{Float32}(undef, output_n + 1),
+            Array{Float32}(undef, output_n + 1),
+            Array{Float32}(undef, input_n + 1, hidden_n + 1),
+            Array{Float32}(undef, hidden_n + 1, output_n + 1),
+            Array{Float32}(undef, input_n + 1, hidden_n + 1),
+            Array{Float32}(undef, hidden_n + 1, output_n + 1)
+        )
 end
 
 # Returns a random number between 0.0 and 1.0.
@@ -56,6 +59,7 @@ function squash(x)
     1.0 / (1.0 + exp(-x))
 end
 
+# This function randomizes the values contained in an m-by-n weight matrix.
 function bpnn_randomize_weights(w, m, n)
     for i = 1:m+1
         for j = 1:n+1
@@ -64,13 +68,15 @@ function bpnn_randomize_weights(w, m, n)
     end
 end
 
+# This function sets all the values of an array of size m to some value.
+# In particular, it sets all values to 0.1 at this time rather than randomizing it.
 function bpnn_randomize_row(w, m)
     for i = 1:m+1
         w[i] = 0.1
     end
 end
 
-
+# This function zeroes out the weights of an m-by-n matrix.
 function bpnn_zero_weights(w, m, n)
     for i = 1:m+1
         for j = 1:n+1
@@ -79,9 +85,10 @@ function bpnn_zero_weights(w, m, n)
     end
 end
 
+# This function initializes the random number generation process with a given seed.
 function bpnn_initialize(seed)
     println("Random number generator seed: ", seed)
-    srand(seed)
+    Random.seed!(seed)
 end
 
 # Creates a new fully-connected network from scratch, with the given numbers of
@@ -113,6 +120,7 @@ function bpnn_layerforward(l1, l2, conn, n1, n2)
     end
 end
 
+# This function calculates the error in the output layer for the backpropagation algorithm.
 function bpnn_output_error(delta, target, output, nj)
     errsum = 0.0
     for j = 2:nj+1
@@ -125,6 +133,7 @@ function bpnn_output_error(delta, target, output, nj)
     return errsum
 end
 
+# This function calculates error in the hidden layer for the backpropgation algorithm.
 function bpnn_hidden_error(delta_h, nh, delta_o, no, who, hidden)
     errsum = 0.0
     for j = 2:nh+1
@@ -140,6 +149,7 @@ function bpnn_hidden_error(delta_h, nh, delta_o, no, who, hidden)
     return errsum
 end
 
+# This function adjusts weights in accordance with the backpropagation algorithm.
 function bpnn_adjust_weights(delta, ndelta, ly, nly, w, oldw)
     ly[1] = 1.0
     for j = 2:ndelta+1
@@ -151,6 +161,7 @@ function bpnn_adjust_weights(delta, ndelta, ly, nly, w, oldw)
     end
 end
 
+# This function represents the actions of a feedforward layer.
 function bpnn_feedforward(net)
     inp = net.input_n
     hid = net.hidden_n
@@ -189,6 +200,7 @@ function bpnn_train(net)
     return (out_err, hid_err)
 end
 
+# This method saves the neural network to a file.
 function bpnn_save(net, filename)
     pFile = open(filename, "w+")
 
@@ -210,6 +222,7 @@ function bpnn_save(net, filename)
     end
 end
 
+# This function reads in a neural network from a file.
 function bpnn_read(filename)
     fd = open(filename, "r")
     println("Reading '", filename, "'")

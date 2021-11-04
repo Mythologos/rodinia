@@ -1,5 +1,7 @@
 include("backprop.jl")
 
+using Printf
+
 const OUTPUT = haskey(ENV, "OUTPUT")
 
 function backprop_face(layer_size)
@@ -15,9 +17,7 @@ function backprop_face(layer_size)
     println("Starting training kernel")
     bpnn_train_kernel(net)
 
-    if OUTPUT
-        bpnn_save(net, "output.dat")
-    end
+    bpnn_save(net, "output.dat")
 
     println("Training done")
 end
