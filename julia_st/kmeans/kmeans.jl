@@ -1,10 +1,10 @@
 # Based on the OpenMP version of the k-means algorithm, this algorithm should do the following:
 # It should have a command line. This command line accepts arguments of:
 # (1) the filename for an input file containing data to examine.
-# (2) an indication of whether the file is a binary file or not.
+# (2) an indication of whether the file is a binary file or not. [Omitted for now, as there doesn't seem to be an explicit need to use this file type.]
 # (3) the number of clusters (with a default value of 5; the k in k-means)
 # (4) the threshold value for clustering
-# (5) the number of threads to use
+# (5) the number of threads to use [Omitted, since this is the single-threaded version, and we only need one.]
 # This k-means algorithm is regular. Although mentions of a fuzzy c-means algorithm are in the code,
 # the code ultimately represents a traditional k-means algorithm.
 #
@@ -34,16 +34,40 @@
 
 # Note that, to confirm convergence, they set a limit for the number of loops to 500.
 
-using Printf
-
-
 function main(args)
-    if length(args) < 
-        @printf(STDERR, "Invalid set of arguments.\n")
+    if length(args) < 3
+        println("Invalid set of arguments.\n")
         exit(-1)
     end
     
-    data_file::IO = open(args[1], "r")
-    
-    # WIP
+    numObjects::Int32, numAttributes::Int32 = 0, 0
+
+    dataFile::IOStream = open(args[1], "r")
+    # We open the data file and iterate over it to get the number of lines in it.
+    numObjects = countlines(dataFile)
+
+    # We reset the data file back to the beginning, read an item, and tabulate its number of elements.
+    seekstart(dataFile)
+    firstDataObject::String = readline(dataFile)
+    numAttributes = size(split(firstDataObject), 1)
+
+    # We define the main structure for the data for the rest of the computations.
+    data::Array{Float32, 2} = zeros(Float32, (numObjects, numAttributes))
+        
+    # We reset the data file back to the beginning to iterate over it and collect the data.
+    seekstart(dataFile)
+    for (line_index, line) in enumerate(eachline(dataFile))
+        newLine::Array{String, 1} = [string(token) for token in split(line)]
+        for (token_index, token) in enumerate(newLine)
+            data[line_index, token_index] = parse(Float32, token)
+        end
+    end
+
+    # Since we're done with the file and have collected the full data, we close the file.
+    close(dataFile)
+
+    numClusters::Int32 = parse(Int32, args[2])
+    thresholdValue::Int32 = parse(Int32, args[3])
 end
+
+main(ARGS)
