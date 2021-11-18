@@ -1,38 +1,8 @@
-# Based on the OpenMP version of the k-means algorithm, this algorithm should do the following:
-# It should have a command line. This command line accepts arguments of:
-# (1) the filename for an input file containing data to examine.
-# (2) an indication of whether the file is a binary file or not. [Omitted for now, as there doesn't seem to be an explicit need to use this file type.]
-# (3) the number of clusters (with a default value of 5; the k in k-means)
-# (4) the threshold value for clustering
-# (5) the number of threads to use [Omitted, since this is the single-threaded version, and we only need one.]
-# This k-means algorithm is regular. Although mentions of a fuzzy c-means algorithm are in the code,
-# the code ultimately represents a traditional k-means algorithm.
-#
-# To perform this algorithm, there are a few steps:
-# (1) From a set of initial centroids--central points--of size k, we calculate the distance between a point x
-# and each centroid. The calculations here can be independent, so this is a place where parallelization can occur.
-# (2) For each point, we determine what cluster that point is a part of by determining the closest centroid.
-# Points are grouped by these centroids. When done grouping, we calculate the overall "error" of the clustering process.
-# If the error is less than the threshold value, we're done and can return the clusters. Otherwise,
-# we aren't done and we calculate new centroids based on the clusters (e.g., the mean of the points in each cluster),
-# and we repeat the process with the new centroids but the same points. 
-# The algorithm continues until the error is under the threshold value.
+using Printf
 
-# The actual C code proceeds by first allocating space for all data and loading it in.
-# After that, it performs the actual algorithm using cluster.c and kmeans_clustering.c.
-# They use Euclidean distance as their distance metric 
-# (with a squared version, since the order is more important than the magnitude.
-# Then, they utilize the first k data points to decide initial clusters.
-# When performing k-means, it seems like they proceed to calculate the threshold by recording cluster membership.
-# In other words, the first round will proceed to the second one no matter what. When the second round comes,
-# the first membership list and the second membership list are compared point by point.
-# If the number of changes is less than the threshold, the iteration ends. Otherwise, it doesn't,
-# and the new memberships are used to tabulate change for the next round until convergence occurs.
-# The OpenMP code enjoys performing running tallies of data and manipulating each point in every way possible
-# so as to parallelize various actions to the greatest extent. For example, it computes partial sums
-# for clusters in preparation for tabulating new centroids out of the averages of the contained points.
+const OUTPUT = haskey(ENV, "OUTPUT")
+const MAX_LOOPS = 500
 
-# Note that, to confirm convergence, they set a limit for the number of loops to 500.
 
 function main(args)
     if length(args) < 3
@@ -52,15 +22,17 @@ function main(args)
     numAttributes = size(split(firstDataObject), 1)
 
     # We define the main structure for the data for the rest of the computations.
-    data::Array{Float32, 2} = zeros(Float32, (numObjects, numAttributes))
+    data::Vector{Vector{Float32}} = Vector{Vector{Float32}}(undef, numObjects)
         
     # We reset the data file back to the beginning to iterate over it and collect the data.
     seekstart(dataFile)
     for (line_index, line) in enumerate(eachline(dataFile))
-        newLine::Array{String, 1} = [string(token) for token in split(line)]
+        newVector::Vector{Float32} = Vector{Float32}(undef, numAttributes)
+        newLine::Vector{String} = [string(token) for token in split(line)]
         for (token_index, token) in enumerate(newLine)
-            data[line_index, token_index] = parse(Float32, token)
+            newVector[token_index] = parse(Float32, token)
         end
+        data[line_index] = newVector
     end
 
     # Since we're done with the file and have collected the full data, we close the file.
@@ -68,6 +40,66 @@ function main(args)
 
     numClusters::Int32 = parse(Int32, args[2])
     thresholdValue::Int32 = parse(Int32, args[3])
+
+    centroids::Vector{Vector{Float32}} = first(data, numClusters)
+    membership::Vector{Int32} = zeros(Int32, numObjects)
+
+    loopCount::Int16 = 0
+    delta::Int32 = typemax(Int32)
+    while delta > thresholdValue && loopCount < MAX_LOOPS
+        new_centroids::Vector{Vector{Float32}} = [zeros(numAttributes) for _ in 1:numClusters]
+        new_centroid_lengths::Vector{Int32} = [zero(Int32) for _ in 1:numClusters]
+
+        delta = 0
+        for (point_index, point) in enumerate(data)
+            # For each point, we determine the nearest center--which determines which cluster it joins.
+            new_membership::Int32 = find_nearest_center(point, centroids)
+            if membership[point_index] != new_membership
+                delta += 1
+            end
+            membership[point_index] = new_membership
+
+            # We handle intermediary steps to compute new centroids later.
+            new_centroids[new_membership] += data[point_index]
+            new_centroid_lengths[new_membership] += 1
+        end
+
+        # We calculate the new centroids. If a cluster received no centroids, 
+        # we use the same centroid from the previous iteration.
+        for cluster_index in 1:numClusters
+            if new_centroid_lengths[cluster_index] > 0
+                centroids[cluster_index] = new_centroids[cluster_index] / new_centroid_lengths[cluster_index]
+            end
+        end
+    end
+
+    if OUTPUT
+        out = open("output.txt", "w")
+        for cluster_index in 1:numClusters
+            @printf(out, "%d:", cluster_index)
+            for attribute_index in 1:numAttributes
+                @printf(out, " %f", centroids[cluster_index][attribute_index])
+            end
+            @printf(out, "\n")
+        end
+        close(out)
+end
+
+function get_squared_euclidean_distance(first::Vector{Float32}, second::Vector{Float32})
+    return sum(abs2, first - second)
+end
+
+function find_nearest_center(point::Vector{Float32}, centroids::Vector{Vector{Float32}})
+    nearest_center_index::Int32 = 0
+    closest_distance = nothing
+    for (centroid_index, centroid) in enumerate(centroids)
+        current_distance::Float32 = get_squared_euclidean_distance(point, centroid)
+        if isnothing(closest_distance) || closest_distance > current_distance
+            closest_distance = current_distance
+            nearest_center_index = centroid_index
+        end
+    end
+    return nearest_center_index
 end
 
 main(ARGS)
