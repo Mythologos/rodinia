@@ -75,45 +75,27 @@ function main(args)
         end
 
         if rec_count != REC_WINDOW
-            #if (!ferror(flist)) { // an eof occured
-                close(fp)
-
-                if eof(flist)
-                    done = 1
-                else
-                    dbname = chomp(readline(flist))
-                    #if (fscanf(flist, "%s\n", dbname) != 1) {
-                    #   fprintf(stderr, "error reading filelist\n");
-                    #   exit(0);
-                    #}
-
-                    fp = open(dbname, "r")
-                    #if (!fp) {
-                    #   printf("error opening flist\n");
-                    #   exit(1);
-                    #}
-                end
-            #} else {
-            #   perror("Error");
-            #   exit(0);
-            #}
+            close(fp)
+            if eof(flist)
+                done = 1
+            else
+                dbname = chomp(readline(flist))
+                fp = open(dbname, "r")
+            end
         end
 
-# #pragma omp parallel for shared(z, target_lat, target_long) private(i, rec_iter, tmp_lat, tmp_long)
         for i = 1:rec_count
             tmp_lat, tmp_long = map(x -> parse(Float32, x), split(sandbox[i][LATITUDE_POS:end]))
             z[i] = sqrt(((tmp_lat - target_lat) * (tmp_lat - target_lat)) +
                 ((tmp_long - target_long) * (tmp_long - target_long)))
         end
-# #pragma omp barrier
 
         for i = 1:rec_count
             max_dist = -1
             max_idx = 1
 
-            # Find a neighbor with greatest dist and take his spot if allowed!
+            # Find a neighbor with greatest distance and take its spot.
             for j = 1:k
-
                 if neighbors[j].dist > max_dist
                     max_dist = neighbors[j].dist
                     max_idx = j
@@ -128,13 +110,6 @@ function main(args)
         end
     end
 
-    print("The ", k, " nearest neighbors are:\n");
-    for j in length(neighbors):-1:1
-        if neighbors[j].dist != OPEN
-            println(neighbors[j].entry, "; ", neighbors[j].dist)
-        end
-    end
-
     if OUTPUT
         out = open("output.txt", "w")
         @printf(out, "The %d nearest neighbors are:\n", k);
@@ -144,6 +119,13 @@ function main(args)
             end
         end
         close(out)
+    end
+
+    print("The ", k, " nearest neighbors are:\n");
+    for j in length(neighbors):-1:1
+        if neighbors[j].dist != OPEN
+            println(neighbors[j].entry, "; ", neighbors[j].dist)
+        end
     end
 
     close(flist)

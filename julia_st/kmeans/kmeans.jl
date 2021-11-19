@@ -1,3 +1,4 @@
+#!/usr/bin/env julia
 using Printf
 
 const OUTPUT = haskey(ENV, "OUTPUT")

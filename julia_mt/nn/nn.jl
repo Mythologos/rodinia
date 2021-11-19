@@ -31,20 +31,12 @@ function main(args)
     end
 
     flist = open(args[1], "r")
-    #if (!flist) {
-    #    println("error opening flist")
-    #    exit(1);
-    #}
 
     k = parse(Int, args[2])
     target_lat = parse(Float64, args[3])
     target_long = parse(Float64, args[4])
 
     neighbors = Array{Neighbor}(undef, k)
-    #if (neighbors == NULL) {
-    #    fprintf(stderr, "no room for neighbors\n");
-    #    exit(0);
-    #}
 
     # Initialize list of nearest neighbors to very large dist.
     for j in eachindex(neighbors)
@@ -53,23 +45,15 @@ function main(args)
 
     # Main processing
     dbname = chomp(readline(flist))
-    #if (fscanf(flist, "%s\n", dbname) != 1) {
-    #   fprintf(stderr, "error reading filelist\n");
-    #   exit(0);
-    #}
 
     fp = open(dbname, "r")
-    #if (!fp) {
-    #   printf("error opening flist\n");
-    #   exit(1);
-    #}
 
     done::Bool = false
     z = Array{Float32}(undef, REC_WINDOW)
     sandbox = Array{String}(undef, REC_WINDOW)
 
     while !done
-        # Read in REC_WINDOW number of records
+        # Read in REC_WINDOW number of records.
         rec_count = 0
         while !eof(fp) && (rec_count < REC_WINDOW)
             line = chomp(readline(fp))
@@ -78,45 +62,27 @@ function main(args)
         end
 
         if rec_count != REC_WINDOW
-            #if (!ferror(flist)) { // an eof occured
-                close(fp)
+            close(fp)
 
-                if eof(flist)
-                    done = 1
-                else
-                    dbname = chomp(readline(flist))
-                    #if (fscanf(flist, "%s\n", dbname) != 1) {
-                    #   fprintf(stderr, "error reading filelist\n");
-                    #   exit(0);
-                    #}
-
-                    fp = open(dbname, "r")
-                    #if (!fp) {
-                    #   printf("error opening flist\n");
-                    #   exit(1);
-                    #}
-                end
-            #} else {
-            #   perror("Error");
-            #   exit(0);
-            #}
+            if eof(flist)
+                done = 1
+            else
+                dbname = chomp(readline(flist))
+                fp = open(dbname, "r")
+            end
         end
 
-# #pragma omp parallel for shared(z, target_lat, target_long) private(i, rec_iter, tmp_lat, tmp_long)
-        for i = 1:rec_count
+        Threads.@threads for i = 1:rec_count
             tmp_lat, tmp_long = map(x -> parse(Float32, x), split(sandbox[i][LATITUDE_POS:end]))
-            z[i] = sqrt(((tmp_lat - target_lat) * (tmp_lat - target_lat)) +
-                ((tmp_long - target_long) * (tmp_long - target_long)))
+            z[i] = sqrt(((tmp_lat - target_lat) * (tmp_lat - target_lat)) + ((tmp_long - target_long) * (tmp_long - target_long)))
         end
-# #pragma omp barrier
 
-        for i = 1:rec_count
+        Threads.@threads for i = 1:rec_count
             max_dist = -1
             max_idx = 1
 
-            # Find a neighbor with greatest dist and take his spot if allowed!
+            # Find a neighbor with greatest distance and take its spot.
             for j = 1:k
-
                 if neighbors[j].dist > max_dist
                     max_dist = neighbors[j].dist
                     max_idx = j
@@ -128,13 +94,6 @@ function main(args)
                 neighbors[max_idx].entry = sandbox[i]
                 neighbors[max_idx].dist = z[i];
             end
-        end
-    end
-
-    print("The ", k, " nearest neighbors are:\n");
-    for j in length(neighbors):-1:1
-        if neighbors[j].dist != OPEN
-            println(neighbors[j].entry, "; ", neighbors[j].dist)
         end
     end
 
