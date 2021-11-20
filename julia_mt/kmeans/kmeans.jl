@@ -29,13 +29,13 @@ function main(args)
         
     # We reset the data file back to the beginning to iterate over it and collect the data.
     seekstart(dataFile)
-    for (line_index, line) in enumerate(eachline(dataFile))
+    for (lineIndex, line) in enumerate(eachline(dataFile))
         newVector::Vector{Float32} = Vector{Float32}(undef, numAttributes)
         newLine::Vector{String} = [string(token) for token in split(line)]
-        for (token_index, token) in enumerate(newLine)
-            newVector[token_index] = parse(Float32, token)
+        for (tokenIndex, token) in enumerate(newLine)
+            newVector[tokenIndex] = parse(Float32, token)
         end
-        data[line_index] = newVector
+        data[lineIndex] = newVector
     end
 
     # Since we're done with the file and have collected the full data, we close the file.
@@ -47,45 +47,68 @@ function main(args)
     centroids::Vector{Vector{Float32}} = first(data, numClusters)
     membership::Vector{Int32} = zeros(Int32, numObjects)
 
+    # These data structures are individualized for each thread.
+    # They are the only ones that should actively be assigned to during multithreading,
+    # unless the variables are temporary.
+    threadedCentroids::Vector{Vector{Vector{Float32}}} = [[zeros(Float32, numAttributes) for _ in 1:numClusters] for _ in 1:Threads.nthreads()]
+    threadedCentroidLengths::Vector{Vector{Int32}} = [[zero(Int32) for _ in 1:numClusters] for _ in 1:Threads.nthreads()]
+    threadedDelta::Vector{Int32} = zeros(Int32, Threads.nthreads())
+
+    newCentroids::Vector{Vector{Float32}} = [zeros(numAttributes) for _ in 1:numClusters]
+    newCentroidLengths::Vector{Int32} = [zero(Int32) for _ in 1:numClusters]
+
     loopCount::Int16 = 0
     delta::Int32 = typemax(Int32)
     while delta > thresholdValue && loopCount < MAX_LOOPS
-        new_centroids::Vector{Vector{Float32}} = [zeros(numAttributes) for _ in 1:numClusters]
-        new_centroid_lengths::Vector{Int32} = [zero(Int32) for _ in 1:numClusters]
-
         delta = 0
-        for (point_index, point) in enumerate(data)
+        Threads.@threads for (pointIndex, point) in collect(enumerate(data))
             # For each point, we determine the nearest center--which determines which cluster it joins.
-            new_membership::Int32 = find_nearest_center(point, centroids)
-            if membership[point_index] != new_membership
-                delta += 1
+            newMembership::Int32 = find_nearest_center(point, centroids)
+            if membership[pointIndex] != newMembership
+                threadedDelta[Threads.threadid()] += 1
             end
-            membership[point_index] = new_membership
+            membership[pointIndex] = newMembership
 
             # We handle intermediary steps to compute new centroids later.
-            new_centroids[new_membership] += data[point_index]
-            new_centroid_lengths[new_membership] += 1
+            threadedCentroids[Threads.threadid()][newMembership] += data[pointIndex]
+            threadedCentroidLengths[Threads.threadid()][newMembership] += 1
         end
 
         # We calculate the new centroids. If a cluster received no centroids, 
         # we use the same centroid from the previous iteration.
-        for cluster_index in 1:numClusters
-            if new_centroid_lengths[cluster_index] > 0
-                centroids[cluster_index] = new_centroids[cluster_index] / new_centroid_lengths[cluster_index]
+        for clusterIndex in 1:numClusters
+            for threadIndex in 1:Threads.nthreads()
+                newCentroidLengths[clusterIndex] += threadedCentroidLengths[threadIndex][clusterIndex]
+                threadedCentroidLengths[threadIndex][clusterIndex] = 0
+
+                newCentroids[clusterIndex] += threadedCentroids[threadIndex][clusterIndex]
+                threadedCentroids[threadIndex][clusterIndex] = zeros(Float32, numAttributes)
             end
         end
+
+        for clusterIndex in 1:numClusters
+            if newCentroidLengths[clusterIndex] > 0
+                centroids[clusterIndex] = newCentroids[clusterIndex] / newCentroidLengths[clusterIndex]
+            end
+            newCentroids[clusterIndex] = zeros(Float32, numAttributes)
+            newCentroidLengths[clusterIndex] = 0
+        end
+        delta = sum(threadedDelta)
+        threadedDelta = zeros(Threads.nthreads())
+        loopCount += 1
     end
 
     if OUTPUT
         out = open("output.txt", "w")
-        for cluster_index in 1:numClusters
-            @printf(out, "%d:", cluster_index)
-            for attribute_index in 1:numAttributes
-                @printf(out, " %f", centroids[cluster_index][attribute_index])
+        for clusterIndex in 1:numClusters
+            @printf(out, "%d:", clusterIndex)
+            for attributeIndex in 1:numAttributes
+                @printf(out, " %f", centroids[clusterIndex][attributeIndex])
             end
             @printf(out, "\n")
         end
         close(out)
+    end
 end
 
 function get_squared_euclidean_distance(first::Vector{Float32}, second::Vector{Float32})
@@ -93,16 +116,16 @@ function get_squared_euclidean_distance(first::Vector{Float32}, second::Vector{F
 end
 
 function find_nearest_center(point::Vector{Float32}, centroids::Vector{Vector{Float32}})
-    nearest_center_index::Int32 = 0
-    closest_distance = nothing
-    for (centroid_index, centroid) in enumerate(centroids)
-        current_distance::Float32 = get_squared_euclidean_distance(point, centroid)
-        if isnothing(closest_distance) || closest_distance > current_distance
-            closest_distance = current_distance
-            nearest_center_index = centroid_index
+    nearestCenterIndex::Int32 = 0
+    closestDistance = nothing
+    for (centroidIndex, centroid) in enumerate(centroids)
+        currentDistance::Float32 = get_squared_euclidean_distance(point, centroid)
+        if isnothing(closestDistance) || closestDistance > currentDistance
+            closestDistance = currentDistance
+            nearestCenterIndex = centroidIndex
         end
     end
-    return nearest_center_index
+    return nearestCenterIndex
 end
 
 main(ARGS)
