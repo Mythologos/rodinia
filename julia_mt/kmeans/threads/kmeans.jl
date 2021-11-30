@@ -61,17 +61,19 @@ function main(args)
     delta::Int32 = typemax(Int32)
     while delta > thresholdValue && loopCount < MAX_LOOPS
         delta = 0
-        Threads.@threads for (pointIndex, point) in collect(enumerate(data))
-            # For each point, we determine the nearest center--which determines which cluster it joins.
-            newMembership::Int32 = find_nearest_center(point, centroids)
-            if membership[pointIndex] != newMembership
-                threadedDelta[Threads.threadid()] += 1
-            end
-            membership[pointIndex] = newMembership
+        @sync for (pointIndex, point) in collect(enumerate(data))
+            Threads.@spawn begin
+                # For each point, we determine the nearest center--which determines which cluster it joins.
+                newMembership::Int32 = find_nearest_center(point, centroids)
+                if membership[pointIndex] != newMembership
+                    threadedDelta[Threads.threadid()] += 1
+                end
+                membership[pointIndex] = newMembership
 
-            # We handle intermediary steps to compute new centroids later.
-            threadedCentroids[Threads.threadid()][newMembership] += data[pointIndex]
-            threadedCentroidLengths[Threads.threadid()][newMembership] += 1
+                # We handle intermediary steps to compute new centroids later.
+                threadedCentroids[Threads.threadid()][newMembership] += data[pointIndex]
+                threadedCentroidLengths[Threads.threadid()][newMembership] += 1
+            end
         end
 
         # We calculate the new centroids. If a cluster received no centroids, 
@@ -98,17 +100,15 @@ function main(args)
         loopCount += 1
     end
 
-    if OUTPUT
-        out = open("output.txt", "w")
-        for clusterIndex in 1:numClusters
-            @printf(out, "%d:", clusterIndex)
-            for attributeIndex in 1:numAttributes
-                @printf(out, " %f", centroids[clusterIndex][attributeIndex])
-            end
-            @printf(out, "\n")
+    out = open("output.txt", "w")
+    for clusterIndex in 1:numClusters
+        @printf(out, "%d:", clusterIndex)
+        for attributeIndex in 1:numAttributes
+            @printf(out, " %f", centroids[clusterIndex][attributeIndex])
         end
-        close(out)
+        @printf(out, "\n")
     end
+    close(out)
 end
 
 function get_squared_euclidean_distance(first::Vector{Float32}, second::Vector{Float32})
@@ -117,10 +117,10 @@ end
 
 function find_nearest_center(point::Vector{Float32}, centroids::Vector{Vector{Float32}})
     nearestCenterIndex::Int32 = 0
-    closestDistance = nothing
+    closestDistance::Float32 = typemax(Float32)
     for (centroidIndex, centroid) in enumerate(centroids)
         currentDistance::Float32 = get_squared_euclidean_distance(point, centroid)
-        if isnothing(closestDistance) || closestDistance > currentDistance
+        if closestDistance > currentDistance
             closestDistance = currentDistance
             nearestCenterIndex = centroidIndex
         end

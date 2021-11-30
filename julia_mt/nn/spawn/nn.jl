@@ -72,41 +72,43 @@ function main(args)
             end
         end
 
-        Threads.@threads for i = 1:rec_count
-            tmp_lat, tmp_long = map(x -> parse(Float32, x), split(sandbox[i][LATITUDE_POS:end]))
-            z[i] = sqrt(((tmp_lat - target_lat) * (tmp_lat - target_lat)) + ((tmp_long - target_long) * (tmp_long - target_long)))
+        @sync for i = 1:rec_count
+            Threads.@spawn begin
+                tmp_lat, tmp_long = map(x -> parse(Float32, x), split(sandbox[i][LATITUDE_POS:end]))
+                z[i] = sqrt(((tmp_lat - target_lat) * (tmp_lat - target_lat)) + ((tmp_long - target_long) * (tmp_long - target_long)))
+            end
         end
 
-        Threads.@threads for i = 1:rec_count
-            max_dist = -1
-            max_idx = 1
+        @sync for i = 1:rec_count
+            Threads.@spawn begin
+                max_dist = -1
+                max_idx = 1
 
-            # Find a neighbor with greatest distance and take its spot.
-            for j = 1:k
-                if neighbors[j].dist > max_dist
-                    max_dist = neighbors[j].dist
-                    max_idx = j
+                # Find a neighbor with greatest distance and take its spot.
+                for j = 1:k
+                    if neighbors[j].dist > max_dist
+                        max_dist = neighbors[j].dist
+                        max_idx = j
+                    end
+                end
+
+                # Compare each record with max value to find the nearest neighbor.
+                if z[i] < neighbors[max_idx].dist
+                    neighbors[max_idx].entry = sandbox[i]
+                    neighbors[max_idx].dist = z[i];
                 end
             end
-
-            # Compare each record with max value to find the nearest neighbor.
-            if z[i] < neighbors[max_idx].dist
-                neighbors[max_idx].entry = sandbox[i]
-                neighbors[max_idx].dist = z[i];
-            end
         end
     end
 
-    if OUTPUT
-        out = open("output.txt", "w")
-        @printf(out, "The %d nearest neighbors are:\n", k);
-        for j in length(neighbors):-1:1
-            if neighbors[j].dist != OPEN
-                @printf(out, "%s --> %f\n", neighbors[j].entry, neighbors[j].dist)
-            end
+    out = open("output.txt", "w")
+    @printf(out, "The %d nearest neighbors are:\n", k);
+    for j in length(neighbors):-1:1
+        if neighbors[j].dist != OPEN
+            @printf(out, "%s --> %f\n", neighbors[j].entry, neighbors[j].dist)
         end
-        close(out)
     end
+    close(out)
 
     close(flist)
 end
