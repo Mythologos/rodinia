@@ -61,17 +61,19 @@ function main(args)
     delta::Int32 = typemax(Int32)
     while delta > thresholdValue && loopCount < MAX_LOOPS
         delta = 0
-        Threads.@threads for (pointIndex, point) in collect(enumerate(data))
-            # For each point, we determine the nearest center--which determines which cluster it joins.
-            newMembership::Int32 = find_nearest_center(point, centroids)
-            if membership[pointIndex] != newMembership
-                threadedDelta[Threads.threadid()] += 1
-            end
-            membership[pointIndex] = newMembership
+        @sync for (pointIndex, point) in collect(enumerate(data))
+            Threads.@spawn begin
+                # For each point, we determine the nearest center--which determines which cluster it joins.
+                newMembership::Int32 = find_nearest_center(point, centroids)
+                if membership[pointIndex] != newMembership
+                    threadedDelta[Threads.threadid()] += 1
+                end
+                membership[pointIndex] = newMembership
 
-            # We handle intermediary steps to compute new centroids later.
-            threadedCentroids[Threads.threadid()][newMembership] += data[pointIndex]
-            threadedCentroidLengths[Threads.threadid()][newMembership] += 1
+                # We handle intermediary steps to compute new centroids later.
+                threadedCentroids[Threads.threadid()][newMembership] += data[pointIndex]
+                threadedCentroidLengths[Threads.threadid()][newMembership] += 1
+            end
         end
 
         # We calculate the new centroids. If a cluster received no centroids, 
